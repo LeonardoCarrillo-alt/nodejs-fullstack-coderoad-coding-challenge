@@ -29,6 +29,18 @@ jobs:
           npm run build
         working-directory: server
 
+      - name: Prepare remote directories
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            sudo mkdir -p /opt/app/server
+            sudo chown -R $(id -un):$(id -gn) /opt/app
+            sudo mkdir -p /var/www/html
+            sudo chown -R $(id -un):$(id -gn) /var/www/html
+
       - name: Copy client via SCP
         uses: appleboy/scp-action@v1
         with:
@@ -45,7 +57,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           source: "server/**"
-          target: "/opt/app"
+          target: "/opt/app/server"
 
       - name: Start server on EC2
         uses: appleboy/ssh-action@v1
