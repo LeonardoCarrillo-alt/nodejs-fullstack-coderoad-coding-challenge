@@ -1,29 +1,62 @@
-name: CI Pipeline
+name: Despliegue Fullstack en EC2
 
-on:                     # Cuándo se ejecuta
+on:
   push:
-    branches: [ main ]  # Solo cuando hay un push en main
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
-jobs:                   # Qué tareas ejecuta
-  build:
-    runs-on: ubuntu-latest  # Máquina virtual de GitHub
-
-    steps:               # Pasos a ejecutar
-      - name: Checkout code
-        uses: actions/checkout@v4   # Descarga el código del repo
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Instalar dependencias del client
-        run: npm ci
+      - name: Build client
+        run: |
+          npm ci
+          npm run build
         working-directory: client
 
-      - name: Build del client
-        run: npm run build
-        working-directory: client
+      - name: Build server
+        run: |
+          npm ci
+          npm run build
+        working-directory: server
+
+      - name: Copy client via SCP
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "client/dist/*"
+          target: "/var/www/html"
+
+      - name: Copy server via SCP
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "server/**"
+          target: "/opt/app"
+
+      - name: Start server on EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            mkdir -p /opt/app/server
+            cd /opt/app/server
+            npm ci --omit=dev
+            pkill -f "node dist/server.js" || true
+            nohup npm run start > server.out.log 2>&1 &
 
